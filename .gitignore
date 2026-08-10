@@ -1,0 +1,69 @@
+# Environment files — never commit credentials or local overrides.
+# Keep documented templates available to new contributors.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Python (backend/)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+
+# Node (copilot-runtime/, frontend/)
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+coverage/
+
+# Local application state, incident data, and ADK sessions
+backend/data/
+backend/edgeone_agents/.adk/
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+
+# Logs, temporary files, and local runtime artifacts
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+
+# Secrets and certificate material
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+
+# Historical working material and packaged archives are not part of source.
+archive/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.7z
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

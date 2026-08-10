@@ -1,0 +1,9 @@
+google-adk>=1.0.0
+litellm>=1.0.0          # required when EDGEONE_LLM_PROVIDER=openai
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# --- full-stack serving layer (added when this became a FastAPI app) ---
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+ag-ui-adk>=0.1.0        # wraps root_agent as an AG-UI-compatible service for CopilotKit
