@@ -10,7 +10,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
-import os
 from pathlib import Path
 import re
 import sqlite3
@@ -428,6 +427,7 @@ class IncidentStore:
             self._add_column_if_missing(connection, "jobs", "last_error TEXT")
             self._add_column_if_missing(connection, "jobs", "completed_at TEXT")
             self._add_column_if_missing(connection, "jobs", "available_at TEXT")
+            self._release_legacy_proactive_evidence_waits(connection)
 
     def get_proactive_mode(self) -> dict[str, Any]:
         """Return the persisted operator preference for demo incident autonomy."""
@@ -717,17 +717,12 @@ class IncidentStore:
                     "SELECT proactive_enabled FROM incident_automation_settings WHERE id = 1"
                 ).fetchone()
                 proactive_enabled = bool(proactive_mode and proactive_mode["proactive_enabled"])
-                delay_minutes = _proactive_evidence_delay_minutes() if proactive_enabled else 0
-                available_at = (
-                    (datetime.now(timezone.utc) + timedelta(minutes=delay_minutes)).isoformat().replace("+00:00", "Z")
-                    if delay_minutes else None
-                )
                 connection.execute(
                     """
-                    INSERT INTO jobs (incident_id, job_type, status, created_at, available_at)
-                    VALUES (?, 'investigate_incident', 'queued', ?, ?)
+                    INSERT INTO jobs (incident_id, job_type, status, created_at)
+                    VALUES (?, 'investigate_incident', 'queued', ?)
                     """,
-                    (incident_id, now, available_at),
+                    (incident_id, now),
                 )
                 queued_investigation = True
                 if proactive_enabled:
@@ -738,8 +733,8 @@ class IncidentStore:
                         """,
                         (
                             incident_id,
-                            f"Proactive Agent Team evidence collection is scheduled after EdgeOne's {delay_minutes}-minute reporting delay",
-                            _canonical_json({"mode": "dry_run", "evidence_gate": "waiting", "available_at": available_at, "delay_minutes": delay_minutes}),
+                            "Proactive Agent Team evidence collection queued immediately",
+                            _canonical_json({"mode": "dry_run", "evidence_gate": "immediate"}),
                             now,
                         ),
                     )
@@ -1592,6 +1587,54 @@ class IncidentStore:
             connection.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
 
     @staticmethod
+    def _release_legacy_proactive_evidence_waits(connection: sqlite3.Connection) -> None:
+        """Release only initial proactive waits created by the retired gate.
+
+        ``available_at`` remains the durable scheduler mechanism for bounded
+        client-IP rechecks. Before this change, however, the application used
+        it only on ``investigate_incident`` jobs to impose an initial proactive
+        wait; delayed retries use the separate ``recheck_client_ips`` type.
+        Releasing this narrow set on startup lets an upgraded server process
+        already-open incidents immediately without disturbing retries, leases,
+        completed work, or recovered incidents.
+        """
+        rows = connection.execute(
+            """
+            SELECT id, incident_id, available_at
+            FROM jobs
+            WHERE job_type = 'investigate_incident'
+              AND status = 'queued'
+              AND available_at IS NOT NULL
+            """
+        ).fetchall()
+        if not rows:
+            return
+        now = _utc_now()
+        connection.executemany(
+            "UPDATE jobs SET available_at = NULL WHERE id = ?",
+            [(row["id"],) for row in rows],
+        )
+        connection.executemany(
+            """
+            INSERT INTO incident_events (incident_id, event_type, summary, payload, created_at)
+            VALUES (?, 'proactive.evidence_wait_removed', ?, ?, ?)
+            """,
+            [
+                (
+                    row["incident_id"],
+                    "Initial proactive evidence wait removed; investigation is available immediately",
+                    _canonical_json({"previous_available_at": row["available_at"]}),
+                    now,
+                )
+                for row in rows
+            ],
+        )
+        connection.executemany(
+            "UPDATE incidents SET updated_at = ? WHERE id = ?",
+            [(now, row["incident_id"]) for row in rows],
+        )
+
+    @staticmethod
     def _normalize_viewer_id(value: str | None) -> str:
         candidate = (value or "default-operator").strip()
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", candidate):
@@ -1698,13 +1741,6 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _proactive_evidence_delay_minutes() -> int:
-    """Return the bounded initial delay for proactive top-N evidence."""
-    try:
-        configured = int(os.environ.get("INCIDENT_PROACTIVE_EVIDENCE_DELAY_MINUTES", "15"))
-    except ValueError:
-        configured = 15
-    return max(10, min(configured, 60))
 
 
 def _unix_timestamp_to_utc(value: Any) -> str | None:

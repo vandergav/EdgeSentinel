@@ -51,6 +51,13 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
+        # Vite selects the next free local port when 5173 is occupied, and a
+        # browser can use 127.0.0.1 instead of localhost. The incident unread
+        # header causes these otherwise-safe local GETs to preflight, so exact
+        # port matching turns a harmless dev-port change into a 400. This
+        # regex is deliberately local-only; deployed browser origins still
+        # have to be listed explicitly in BACKEND_CORS_ORIGINS above.
+        allow_origin_regex=r"^https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

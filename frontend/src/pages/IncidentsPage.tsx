@@ -52,16 +52,22 @@ export function IncidentsPage() {
   const [proactiveBusy, setProactiveBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [searchParams] = useSearchParams();
-  const { refreshAttention } = useIncidentAttention();
+  const { attention, refreshAttention } = useIncidentAttention();
   const previousActivityIds = useRef(new Map<string, number>());
   const receivedInitialList = useRef(false);
   const pendingQueryRead = useRef(searchParams.get("incident"));
+  const refreshSequence = useRef(0);
   const [highlightedIncidentIds, setHighlightedIncidentIds] = useState<string[]>([]);
 
   const refreshIncidents = useCallback(async (preferredIncidentId?: string) => {
+    const sequence = ++refreshSequence.current;
     setError(null);
     try {
       const items = await listIncidents();
+      // The first empty response can still be in flight when a callback lands
+      // and the attention feed asks for a fresh list. Never let that older
+      // response overwrite a newer, populated result.
+      if (sequence !== refreshSequence.current) return;
       const previous = previousActivityIds.current;
       const changed = receivedInitialList.current
         ? items.filter((item) => previous.get(item.id) !== item.latest_event_id).map((item) => item.id)
@@ -76,6 +82,7 @@ export function IncidentsPage() {
       const selectedId = preferredIncidentId ?? searchParams.get("incident") ?? selected?.id;
       const next = items.find((item) => item.id === selectedId) ?? items[0];
       const detail = next ? await getIncident(next.id) : null;
+      if (sequence !== refreshSequence.current) return;
       setSelected(detail);
       if (detail && pendingQueryRead.current === detail.id) {
         pendingQueryRead.current = null;
@@ -84,15 +91,27 @@ export function IncidentsPage() {
         void refreshAttention();
       }
     } catch (requestError: unknown) {
+      if (sequence !== refreshSequence.current) return;
       setError(requestError instanceof Error ? requestError.message : "Unable to load incidents");
     } finally {
-      setLoading(false);
+      if (sequence === refreshSequence.current) setLoading(false);
     }
   }, [searchParams, selected?.id]);
 
   useEffect(() => {
     void refreshIncidents();
   }, [refreshIncidents]);
+
+  useEffect(() => {
+    // Attention is already refreshed application-wide. When it notices the
+    // first callback while this page is displaying an empty list, use that
+    // signal to load and select the case immediately instead of waiting for a
+    // manual browser refresh.
+    const newestIncidentId = attention?.items[0]?.id;
+    if (newestIncidentId && !incidents.some((incident) => incident.id === newestIncidentId)) {
+      void refreshIncidents(newestIncidentId);
+    }
+  }, [attention?.items, incidents, refreshIncidents]);
 
   useEffect(() => {
     void getProactiveMode()
@@ -106,16 +125,17 @@ export function IncidentsPage() {
   }, []);
 
   useEffect(() => {
-    if (!selected) return;
     // Keep the selected case file current without requiring a page refresh.
-    // Active automation benefits from a faster cadence; delayed evidence checks
-    // and completed/manual cases use lighter polling.
-    const interval = selected.proactive_workflow?.is_active
+    // When no case is selected, retain a light poll so the first callback is
+    // discoverable even if the attention feed is unavailable. Active
+    // automation benefits from a faster cadence; delayed evidence checks and
+    // completed/manual cases use lighter polling.
+    const interval = selected?.proactive_workflow?.is_active
       ? 2500
-      : selected.evidence_recheck_waiting
+      : selected?.evidence_recheck_waiting
         ? 60_000
         : 15_000;
-    const poll = window.setInterval(() => void refreshIncidents(selected.id), interval);
+    const poll = window.setInterval(() => void refreshIncidents(selected?.id), interval);
     return () => window.clearInterval(poll);
   }, [refreshIncidents, selected, selected?.evidence_recheck_waiting, selected?.proactive_workflow?.is_active]);
 

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="edge-sentinel-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F2FE"/>
+      <stop offset="100%" stop-color="#4FACFE"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="22" fill="#07111f"/>
+  <path d="M50 10 84 24v24c0 22-34 42-34 42S16 70 16 48V24z" stroke="url(#edge-sentinel-gradient)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M36 36h12m-12 14h9m-9 14h12m-12-28v28m28-28H54v14h10v14H54" stroke="url(#edge-sentinel-gradient)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="50" cy="10" r="4" fill="#00F2FE"/>
+  <circle cx="84" cy="24" r="4" fill="#00F2FE"/>
+  <circle cx="16" cy="24" r="4" fill="#00F2FE"/>
+  <circle cx="50" cy="90" r="4" fill="#4FACFE"/>
+</svg>

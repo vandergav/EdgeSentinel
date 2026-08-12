@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import "./AppShell.css";
 import { useIncidentAttention } from "../lib/incidentAttention";
 import { ChatPage } from "../pages/ChatPage";
+import { EdgeSentinelBrand } from "./EdgeSentinalLogo";
 
 interface NavItem {
   to: string;
@@ -31,13 +32,9 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <aside className="app-shell__sidebar">
-        <div className="app-shell__brand">
-          <span className="app-shell__brand-dot" aria-hidden="true" />
-          <div>
-            <div className="app-shell__brand-title">EDGE SENTINEL</div>
-            {/* <div className="app-shell__brand-subtitle">25 agents · CDN/WAF</div> */}
-          </div>
-        </div>
+      <div className="app-shell__brand">
+        <EdgeSentinelBrand />
+      </div>
 
         <nav className="app-shell__nav" aria-label="Primary">
           {NAV_ITEMS.map((item) => (

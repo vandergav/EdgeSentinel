@@ -27,10 +27,11 @@ provider-specific request logic.
   a versioned block-rule recommendation. Execution re-reads the policy and
   rejects stale proposals before calling EdgeOne.
 - **Demonstrate proactive response.** The Incidents page can enable a
-  deliberately narrow Proactive Agent Team demo mode. It waits for the
-  analytics reporting window, qualifies a requests-flood signature, obtains a
-  restricted agent assessment, and can auto-approve the deterministic
-  block-IP path when its demo flags are explicitly enabled.
+  deliberately narrow Proactive Agent Team demo mode. It investigates
+  immediately, qualifies a requests-flood signature, obtains a restricted
+  agent assessment, and can auto-approve the deterministic block-IP path when
+  its demo flags are explicitly enabled. Missing client-IP evidence still
+  triggers bounded delayed rechecks rather than an initial blanket wait.
 
 ## Architecture
 

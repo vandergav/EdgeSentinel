@@ -13,22 +13,6 @@
   gap: 28px;
 }
 
-.app-shell__brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 4px;
-}
-
-.app-shell__brand-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(79, 209, 197, 0.2);
-  flex-shrink: 0;
-}
-
 .app-shell__brand-title {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -106,4 +90,18 @@
 
 .app-shell__chat--hidden {
   display: none;
+}
+
+.app-shell__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-shell__brand-logo {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  /* Optional subtle glow to match dark themes */
+  filter: drop-shadow(0 0 6px rgba(0, 242, 254, 0.4));
 }

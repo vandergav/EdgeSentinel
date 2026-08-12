@@ -344,16 +344,20 @@ class AlarmIngestionTests(unittest.TestCase):
         self.assertEqual(incident["job"]["status"], "completed")
         self.assertEqual(incident["timeline"][-1]["type"], "investigation.completed")
 
-    def test_proactive_flow_waits_for_evidence_before_qualification(self) -> None:
+    def test_proactive_flow_starts_evidence_collection_immediately(self) -> None:
         self.store.set_proactive_mode(enabled=True)
         created = self.store.ingest(active_payload())
         with self.store._connection() as connection:
-            types = [row["job_type"] for row in connection.execute("SELECT job_type FROM jobs WHERE incident_id = ?", (created.incident_id,))]
-            connection.execute(
-                "UPDATE jobs SET available_at = NULL WHERE incident_id = ? AND job_type = 'investigate_incident'",
-                (created.incident_id,),
-            )
-        self.assertEqual(types, ["investigate_incident"])
+            job = connection.execute(
+                "SELECT job_type, available_at FROM jobs WHERE incident_id = ?", (created.incident_id,)
+            ).fetchone()
+        assert job is not None
+        self.assertEqual(job["job_type"], "investigate_incident")
+        self.assertIsNone(job["available_at"])
+        incident = self.store.get_incident(created.incident_id)
+        assert incident is not None
+        self.assertEqual(incident["timeline"][-1]["type"], "proactive.queued")
+        self.assertEqual(incident["timeline"][-1]["payload"]["evidence_gate"], "immediate")
 
         with patch.dict(os.environ, {"INCIDENT_PROACTIVE_DEMO_ENABLED": "true"}):
             run_once(
@@ -368,6 +372,30 @@ class AlarmIngestionTests(unittest.TestCase):
         with self.store._connection() as connection:
             types = [row["job_type"] for row in connection.execute("SELECT job_type FROM jobs WHERE incident_id = ? ORDER BY id", (created.incident_id,))]
         self.assertEqual(types, ["investigate_incident", "proactive_dry_run_assessment"])
+
+    def test_initialize_releases_only_legacy_initial_proactive_waits(self) -> None:
+        created = self.store.ingest(active_payload())
+        legacy_available_at = "2099-01-01T00:00:00Z"
+        with self.store._connection() as connection:
+            connection.execute(
+                "UPDATE jobs SET available_at = ? WHERE incident_id = ? AND job_type = 'investigate_incident'",
+                (legacy_available_at, created.incident_id),
+            )
+
+        self.store.initialize()
+
+        with self.store._connection() as connection:
+            job = connection.execute(
+                "SELECT available_at FROM jobs WHERE incident_id = ? AND job_type = 'investigate_incident'",
+                (created.incident_id,),
+            ).fetchone()
+        assert job is not None
+        self.assertIsNone(job["available_at"])
+        incident = self.store.get_incident(created.incident_id)
+        assert incident is not None
+        migration_events = [event for event in incident["timeline"] if event["type"] == "proactive.evidence_wait_removed"]
+        self.assertEqual(len(migration_events), 1)
+        self.assertEqual(migration_events[0]["payload"]["previous_available_at"], legacy_available_at)
 
     def test_worker_failure_returns_job_to_queue(self) -> None:
         self.store.ingest(active_payload())
